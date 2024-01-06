@@ -54,7 +54,7 @@ const average = (arr) =>
 const API_KEY = "72ea1644";
 
 export default function App() {
-  const [movies, setMovies] = useState(tempMovieData);
+  const [movies, setMovies] = useState([]);
   const [watched, setWatched] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -103,12 +103,15 @@ export default function App() {
 
   useEffect(
     function () {
+      const controller = new AbortController();
+
       async function fetchMovies() {
         try {
           setIsLoading(true);
           setError("");
           const res = await fetch(
-            `https://www.omdbapi.com/?apikey=${API_KEY}&s=${query}`
+            `https://www.omdbapi.com/?apikey=${API_KEY}&s=${query}`,
+            { signal: controller.signal }
           );
 
           if (!res.ok)
@@ -117,8 +120,12 @@ export default function App() {
           const data = await res.json();
           if (data.Response === "False") throw new Error("Movies Not Found.");
           setMovies(data.Search);
+          setError("");
         } catch (err) {
-          setError(err.message);
+          if (err.name !== "AbortError") {
+            console.log(err.message);
+            setError(err.message);
+          }
         } finally {
           setIsLoading(false);
         }
@@ -130,7 +137,12 @@ export default function App() {
         return;
       }
 
+      handleCloseMovie();
       fetchMovies();
+
+      return function () {
+        controller.abort();
+      };
     },
     [query]
   );
@@ -277,6 +289,24 @@ function MovieDetails({ selectedId, oncloseMovie, onAddWatched, watched }) {
 
   useEffect(
     function () {
+      function callBack(e) {
+        if (e.code === "Escape") {
+          oncloseMovie();
+          console.log("Closed");
+        }
+      }
+
+      document.addEventListener("keydown", callBack);
+
+      return function () {
+        document.removeEventListener("keydown", callBack);
+      };
+    },
+    [oncloseMovie]
+  );
+
+  useEffect(
+    function () {
       async function getMovieDetails() {
         setIsLoading(true);
         const res = await fetch(
@@ -289,6 +319,20 @@ function MovieDetails({ selectedId, oncloseMovie, onAddWatched, watched }) {
       getMovieDetails();
     },
     [selectedId]
+  );
+
+  useEffect(
+    function () {
+      if (!title) return;
+      document.title = `Movie | ${title}`;
+
+      return function () {
+        document.title = "UsePopCorn";
+        //closure -> even though the movie is not there still we get the previous movie name
+        //console.log(`clean up effect for movie ${title}`);
+      };
+    },
+    [title]
   );
 
   return (
